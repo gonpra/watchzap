@@ -188,7 +188,6 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Failed opening file")
 	}
-	defer f.Close()
 
 	stat, err := f.Stat()
 	if err != nil {
@@ -206,6 +205,7 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 		log.Error().Err(err).Str("parser", "json").Msg("WZ: Error reading file")
 		return
 	}
+
 	messages, err := parse(filepath.Ext(w.Path), body)
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Error parsing messages")
@@ -214,8 +214,18 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 
 	sendMessages(messages, whatsapp)
 
+	err = f.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("WZ: Could not close file")
+		return
+	}
+
 	if removeOnSend {
-		os.Remove(w.Path)
+		err := os.Remove(w.Path)
+		if err != nil {
+			log.Warn().Err(err).Msg("WZ: Could not delete the file upon send")
+			return
+		}
 	}
 }
 
@@ -242,7 +252,7 @@ func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
 			}
 		}
 		for j, c := range contacts {
-			if m.Recipient == c.PushName {
+			if m.Recipient == c.PushName || m.Recipient == c.FullName {
 				req.Jid = j
 				req.Flag = true
 			}

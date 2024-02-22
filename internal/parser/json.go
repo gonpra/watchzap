@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 
@@ -14,10 +15,13 @@ func JsonParser(body []byte) (*[]Message, error) {
 
 	decodedBody, err := DecodeUTF16(body)
 	if err != nil {
-		log.Error().Err(err).Str("parser", "json").Msg("WZ: Could not decode request body")
+		log.Error().Err(err).Msg("WZ: Could not decode body")
+		return nil, err
 	}
 
-	err = json.Unmarshal(decodedBody, &messages)
+	r := bytes.NewReader(decodedBody)
+	decoder := json.NewDecoder(r)
+	err = decoder.Decode(&messages)
 	if err != nil {
 		log.Warn().
 			Err(err).
