@@ -104,7 +104,7 @@ func main() {
 // Sets up an HTTP server for receiving message requests
 func httpServe(whatsapp *api.Whatsapp) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -270,7 +270,7 @@ func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
 				return err
 			}
 			log.Info().
-				Str("recipient", req.Jid.User).
+				Str("recipient", m.Recipient).
 				Str("content", m.Content).
 				Msg("WZ: Sent message successfully")
 		} else {

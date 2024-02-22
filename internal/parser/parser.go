@@ -10,9 +10,9 @@ import (
 )
 
 type Message struct {
-	Recipient  string
-	Content    string
-	Attachment string
+	Recipient  string `json:"recipient"`
+	Content    string `json:"content"`
+	Attachment string `json:"attachment"`
 }
 
 func DecodeUTF16(b []byte) ([]byte, error) {

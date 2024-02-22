@@ -48,48 +48,65 @@ WatchZap provides the following functionalities:
 - **Both**: Perform both actions concurrently.
 - **Logout**: Log out from WhatsApp and clear the local database.
 
-The message request formats are the following:
-
-JSON
-
-```JSON
-    [
-        {
-            "recipient": "Recipient 1",
-            "content": "Content for Recipient 1",
-            "attachment": "base64string" // Optional field
-        },
-        {
-            "recipient": "Recipient 2",
-            "content": "Content for Recipient 2",
-            "attachment": "base64string" // Optional field
-        }
-    ]
-```
-
-YAML
-
-```YAML
----
-- recipient: Recipient1
-  content: Content for Recipient1
-  attachment: |
-  base64string
-- recipient: Recipient2
-  content: Content for Recipient2
-  attachment: |
-  base64string
-```
-
 If you are using the HTTP server you should add the Content-Type header like:
 
 * **Content-Type**
 : "application/json"
 
-### Supported Formats
+#### Supported Formats
 
 |application/json | text/yaml |
 |-----------------|-----------|
+
+
+#### API
+
+<table>
+<tr>
+
+<td>Method</td>
+<td>URL</td>
+<td>JSON Example</td>
+<td>YAML Example</td>
+
+</tr>
+
+<tr>
+
+<td> POST </td>
+<td> / </td>
+<td>
+
+```json
+[
+    {
+        "recipient": "Recipient 1",
+        "content": "Content for Recipient 1",
+        "attachment": "base64string" // Optional field
+    },
+    {
+        "recipient": "Recipient 2",
+        "content": "Content for Recipient 2",
+        "attachment": "base64string" // Optional field
+    }
+]
+```
+
+</td>
+<td>
+
+```YAML
+---
+- recipient: Recipient1
+  content: Content for Recipient1
+  attachment: base64string
+- recipient: Recipient2
+  content: Content for Recipient2
+  attachment: base64string
+```
+</td>
+</tr>
+</table>
 
 ## Configuration
 
@@ -101,7 +118,7 @@ WatchZap can be configured using command-line flags:
 Example:
 
 ```bash
-./watchzap --debug
+./watchzap --debug --removeOnSend
 ```
 
 ## Dependencies

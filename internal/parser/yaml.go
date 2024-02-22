@@ -2,8 +2,6 @@ package parser
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -12,12 +10,9 @@ import (
 func YamlParser(body []byte) (*[]Message, error) {
 	var messages []Message
 
-	stringBody := strings.TrimSpace(string(body))
-	fmt.Println(stringBody)
-	err := yaml.Unmarshal([]byte(stringBody), &messages)
+	err := yaml.Unmarshal(body, &messages)
 	if err != nil {
 		log.Warn().
-			Err(err).
 			Str("parser", "yaml").
 			Msg("WZ: The file is not in the specified format. See README for more information")
 		return nil, err
