@@ -112,6 +112,7 @@ func httpServe(whatsapp *api.Whatsapp) {
 			w.Write(jsonR)
 			return
 		}
+		defer r.Body.Close()
 
 		messages, err := parse(r.Header.Get("Content-Type"), body)
 		if err != nil {

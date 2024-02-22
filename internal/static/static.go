@@ -9,4 +9,5 @@ const (
 	INTERNAL_SERVER_ERROR = "An unexpected error has occurred"
 	EMPTY_FIELD           = "Mandatory field is empty"
 	NO_PARSER_FOUND       = "No parser found for extension"
+	INVALID_BYTES         = "Must have even byte slice"
 )

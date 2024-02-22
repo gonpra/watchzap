@@ -12,9 +12,14 @@ import (
 func JsonParser(body []byte) (*[]Message, error) {
 	var messages []Message
 
-	err := json.Unmarshal(body, &messages)
+	decodedBody, err := DecodeUTF16(body)
 	if err != nil {
-		log.Error().
+		log.Error().Err(err).Str("parser", "json").Msg("WZ: Could not decode request body")
+	}
+
+	err = json.Unmarshal(decodedBody, &messages)
+	if err != nil {
+		log.Warn().
 			Err(err).
 			Str("parser", "json").
 			Msg("WZ: The file is not in the specified format. See README for more information")
@@ -23,7 +28,7 @@ func JsonParser(body []byte) (*[]Message, error) {
 
 	for i, m := range messages {
 		if m.Recipient == "" || m.Content == "" {
-			log.Warn().
+			log.Error().
 				Str("parser", "json").
 				Int("index", i).
 				Msg("WZ: Recipient or Content fields are empty")
