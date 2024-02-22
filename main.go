@@ -158,7 +158,7 @@ func watch(whatsapp *api.Whatsapp) {
 		for {
 			select {
 			case event := <-w.Event:
-				doEvent(event, whatsapp)
+				go doEvent(event, whatsapp)
 			case err := <-w.Error:
 				log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Failed getting folder event")
 			case <-w.Closed:
