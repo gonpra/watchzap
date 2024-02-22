@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -42,14 +43,12 @@ type MessageRequest struct {
 }
 
 // Parses messages based on their content type
-func parse(body []byte) (*[]parser.Message, error) {
-	trimBody := strings.TrimSpace(string(body))
-
-	if strings.HasPrefix(trimBody, "{") || strings.HasPrefix(trimBody, "[") {
+func parse(ext string, body []byte) (*[]parser.Message, error) {
+	if strings.HasSuffix(ext, "json") {
 		return parser.JsonParser(body)
 	}
 
-	if strings.HasPrefix(trimBody, "---") || strings.HasPrefix(trimBody, "%YAML") {
+	if strings.HasSuffix(ext, "yaml") {
 		return parser.YamlParser(body)
 	}
 
@@ -114,7 +113,7 @@ func httpServe(whatsapp *api.Whatsapp) {
 			return
 		}
 
-		messages, err := parse(body)
+		messages, err := parse(r.Header.Get("Content-Type"), body)
 		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			log.Error().Err(err).Msg("WZ: Error parsing file")
@@ -151,7 +150,7 @@ func watch(whatsapp *api.Whatsapp) {
 	time.Sleep(time.Millisecond * 100)
 
 	w := watcher.New()
-	w.FilterOps(watcher.Create, watcher.Move, watcher.Write)
+	w.FilterOps(watcher.Create, watcher.Move, watcher.Write, watcher.Rename)
 	go func() {
 		for {
 			select {
@@ -186,6 +185,7 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Failed opening file")
 	}
+	defer f.Close()
 
 	stat, err := f.Stat()
 	if err != nil {
@@ -203,13 +203,13 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 		log.Error().Err(err).Str("parser", "json").Msg("WZ: Error reading file")
 		return
 	}
-	messages, err := parse(body)
+	messages, err := parse(filepath.Ext(w.Path), body)
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Error parsing messages")
 		return
 	}
+
 	sendMessages(messages, whatsapp)
-	os.Remove(w.Path)
 }
 
 // Sends messages to recipients based on parsed messages

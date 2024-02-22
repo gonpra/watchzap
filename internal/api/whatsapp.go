@@ -35,9 +35,6 @@ func NewWhatsapp(debug bool) (*Whatsapp, error) {
 	if debug {
 		dbLog = waLog.Stdout("Database", "DEBUG", true)
 		clientLog = waLog.Stdout("Client", "DEBUG", true)
-	} else {
-		dbLog = waLog.Stdout("Database", "INFO", true)
-		clientLog = waLog.Stdout("Client", "INFO", true)
 	}
 
 	container, err := sqlstore.New("sqlite3", "file:zap.db?_foreign_keys=on", dbLog)
