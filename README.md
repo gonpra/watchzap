@@ -81,7 +81,16 @@ YAML
   base64string
 ```
 
-Currently only JSON and YAML is supported
+If you are using the HTTP server you should add the Content-Type header like:
+
+* **Content-Type**
+: "application/json"
+
+### Supported Formats
+
+|application/json | text/yaml |
+|-----------------|-----------|
+
 ## Configuration
 
 WatchZap can be configured using command-line flags:
