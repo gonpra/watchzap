@@ -32,9 +32,10 @@ import (
 type msa map[string]any
 
 var (
-	folder string
-	debug  bool
-	port   string
+	debug        bool
+	removeOnSend bool
+	folder       string
+	port         string
 )
 
 type MessageRequest struct {
@@ -59,6 +60,7 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	flag.BoolVar(&debug, "debug", false, "enables the debug mode for WhatsApp API")
+	flag.BoolVar(&removeOnSend, "removeOnSend", false, "deletes the file after sending the message")
 	flag.Parse()
 
 	db, err := sql.Open("sqlite3", "file:zap.db?_foreign_keys=on")
@@ -211,6 +213,10 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 	}
 
 	sendMessages(messages, whatsapp)
+
+	if removeOnSend {
+		os.Remove(w.Path)
+	}
 }
 
 // Sends messages to recipients based on parsed messages

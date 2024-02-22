@@ -96,6 +96,7 @@ If you are using the HTTP server you should add the Content-Type header like:
 WatchZap can be configured using command-line flags:
 
 - `-debug`: Enable debug mode for WhatsApp API.
+- `-removeOnSend`: Deletes the file inside the Watch Folder after sending the messages
 
 Example:
 
