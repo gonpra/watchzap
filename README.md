@@ -114,11 +114,17 @@ WatchZap can be configured using command-line flags:
 
 - `-debug`: Enable debug mode for WhatsApp API.
 - `-removeOnSend`: Deletes the file inside the Watch Folder after sending the messages
+- `-version`: Prints the program version
 
 Example:
 
 ```bash
 ./watchzap --debug --removeOnSend
+```
+
+```bash
+./watchzap --version
+Watchzap version vX.X.X
 ```
 
 ## Dependencies
