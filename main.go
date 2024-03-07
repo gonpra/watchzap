@@ -31,11 +31,17 @@ import (
 // Msa stands for shortcut for map[string]any
 type msa map[string]any
 
+const (
+	version string = "v0.1.0"
+)
+
 var (
 	debug        bool
 	removeOnSend bool
 	folder       string
 	port         string
+	wait         int
+	printVersion bool
 )
 
 type MessageRequest struct {
@@ -61,7 +67,13 @@ func main() {
 
 	flag.BoolVar(&debug, "debug", false, "enables the debug mode for WhatsApp API")
 	flag.BoolVar(&removeOnSend, "removeOnSend", false, "deletes the file after sending the message")
+	flag.BoolVar(&printVersion, "version", false, "prints the program version")
 	flag.Parse()
+
+	if printVersion {
+		fmt.Printf("Watchzap version %s\n", version)
+		return
+	}
 
 	db, err := sql.Open("sqlite3", "file:zap.db?_foreign_keys=on")
 	if err != nil {
@@ -92,8 +104,8 @@ func main() {
 	case "Both":
 		folder = prompt.Input("What folder will you watch", nil)
 		port = prompt.Input("What port will you listen", nil)
-		go watch(whatsapp)
-		httpServe(whatsapp)
+		go httpServe(whatsapp)
+		watch(whatsapp)
 	case "Logout":
 		whatsapp.Client.Logout()
 		db.Exec(static.WIPE_DB)
@@ -103,6 +115,8 @@ func main() {
 
 // Sets up an HTTP server for receiving message requests
 func httpServe(whatsapp *api.Whatsapp) {
+	time.Sleep(time.Millisecond * 100)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -150,15 +164,13 @@ func httpServe(whatsapp *api.Whatsapp) {
 
 // Sets up a file watcher to monitor changes in a directory
 func watch(whatsapp *api.Whatsapp) {
-	time.Sleep(time.Millisecond * 100)
-
 	w := watcher.New()
 	w.FilterOps(watcher.Create, watcher.Move, watcher.Write, watcher.Rename)
 	go func() {
 		for {
 			select {
 			case event := <-w.Event:
-				go doEvent(event, whatsapp)
+				doEvent(event, whatsapp)
 			case err := <-w.Error:
 				log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Failed getting folder event")
 			case <-w.Closed:
@@ -212,7 +224,10 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 		return
 	}
 
-	sendMessages(messages, whatsapp)
+	err = sendMessages(messages, whatsapp)
+	if err != nil {
+		log.Error().Err(err).Msg("WZ: Could not send messages")
+	}
 
 	err = f.Close()
 	if err != nil {
@@ -231,6 +246,14 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 
 // Sends messages to recipients based on parsed messages
 func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
+	if wait >= 4 {
+		for t := 5; t > 0; t-- {
+			log.Info().Msgf("WZ: Waiting to prevent rate over limit...%v", t)
+			time.Sleep(time.Second * 1)
+		}
+		wait = 0
+	}
+
 	for _, m := range *messages {
 		var req MessageRequest
 
@@ -273,8 +296,10 @@ func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
 				Str("recipient", m.Recipient).
 				Str("content", m.Content).
 				Msg("WZ: Sent message successfully")
+			wait++
 		} else {
 			log.Info().Msg("WZ: Recipient was not found")
+			return err
 		}
 	}
 
