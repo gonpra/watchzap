@@ -32,7 +32,7 @@ import (
 type msa map[string]any
 
 const (
-	version string = "v0.1.0"
+	version string = "v0.1.1"
 )
 
 var (
@@ -51,15 +51,25 @@ type MessageRequest struct {
 
 // Parses messages based on their content type
 func parse(ext string, body []byte) (*[]parser.Message, error) {
-	if strings.HasSuffix(ext, "json") {
+	if ext == "json" {
 		return parser.JsonParser(body)
-	}
-
-	if strings.HasSuffix(ext, "yaml") {
+	} else if ext == "yaml" {
 		return parser.YamlParser(body)
 	}
 
 	return nil, errors.New(static.NO_PARSER_FOUND)
+}
+
+func checkExt(ext string) (string, error) {
+	if strings.HasSuffix(ext, "json") {
+		return "json", nil
+	}
+
+	if strings.HasSuffix(ext, "yaml") || strings.HasSuffix(ext, "yml") {
+		return "yaml", nil
+	}
+
+	return "", errors.New(static.NO_PARSER_FOUND)
 }
 
 func main() {
@@ -196,9 +206,16 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 		return
 	}
 
+	ext, err := checkExt(filepath.Ext(w.Path))
+	if err != nil {
+		log.Error().Err(err).Msg("WZ: Error checking file extension")
+		return
+	}
+
 	f, err := os.Open(w.Path)
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Failed opening file")
+		return
 	}
 
 	stat, err := f.Stat()
@@ -218,7 +235,13 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 		return
 	}
 
-	messages, err := parse(filepath.Ext(w.Path), body)
+	err = f.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("WZ: Could not close file")
+		return
+	}
+
+	messages, err := parse(ext, body)
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Error parsing messages")
 		return
@@ -227,11 +250,6 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 	err = sendMessages(messages, whatsapp)
 	if err != nil {
 		log.Error().Err(err).Msg("WZ: Could not send messages")
-	}
-
-	err = f.Close()
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Could not close file")
 		return
 	}
 
