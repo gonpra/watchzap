@@ -32,7 +32,7 @@ import (
 type msa map[string]any
 
 const (
-	version string = "v0.1.1"
+	version string = "v0.1.2"
 )
 
 var (
@@ -42,6 +42,7 @@ var (
 	port         string
 	wait         int
 	printVersion bool
+	rateLimit    int
 )
 
 type MessageRequest struct {
@@ -78,6 +79,12 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "enables the debug mode for WhatsApp API")
 	flag.BoolVar(&removeOnSend, "removeOnSend", false, "deletes the file after sending the message")
 	flag.BoolVar(&printVersion, "version", false, "prints the program version")
+	flag.IntVar(
+		&rateLimit,
+		"rateLimit",
+		4,
+		"limits the number of messages being sent before waiting",
+	)
 	flag.Parse()
 
 	if printVersion {
@@ -264,7 +271,7 @@ func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
 
 // Sends messages to recipients based on parsed messages
 func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
-	if wait >= 4 {
+	if wait >= rateLimit {
 		for t := 5; t > 0; t-- {
 			log.Info().Msgf("WZ: Waiting to prevent rate over limit...%v", t)
 			time.Sleep(time.Second * 1)
