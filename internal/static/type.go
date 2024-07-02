@@ -1,24 +1,24 @@
 package static
 
 import (
-	"strings"
+    "strings"
 )
 
 // Sets a flag type for []string
 type StringArrayVar []string
 
 func (s *StringArrayVar) String() string {
-	sa := []string(*s)
-	return strings.Join(sa, " ")
+    sa := []string(*s)
+    return strings.Join(sa, " ")
 }
 
 func (s *StringArrayVar) Get() []string {
-	sa := []string(*s)
+    sa := []string(*s)
 
-	return sa
+    return sa
 }
 
 func (s *StringArrayVar) Set(value string) error {
-	*s = append(*s, value)
-	return nil
+    *s = append(*s, value)
+    return nil
 }

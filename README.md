@@ -1,6 +1,7 @@
 # WatchZap
 
-WatchZap is a tool designed to monitor a folder for changes in files containing messages and send those messages via WhatsApp using the WhatsApp API. Alternatively
+WatchZap is a tool designed to monitor a folder for changes in files containing messages and send those messages via
+WhatsApp using the WhatsApp API. Alternatively
 you can also serve an HTTP server which accepts requests and send them to their recipients.
 
 ## Features
@@ -51,13 +52,12 @@ WatchZap provides the following functionalities:
 If you are using the HTTP server you should add the Content-Type header like:
 
 * **Content-Type**
-: "application/json"
+  : "application/json"
 
 #### Supported Formats
 
-|application/json | text/yaml |
-|-----------------|-----------|
-
+| application/json | text/yaml |
+|------------------|-----------|
 
 #### API
 
@@ -104,6 +104,7 @@ If you are using the HTTP server you should add the Content-Type header like:
   content: Content for Recipient2
   attachment: base64string
 ```
+
 </td>
 </tr>
 </table>

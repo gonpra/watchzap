@@ -1,367 +1,377 @@
 package main
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
-	"flag"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"syscall"
-	"time"
+    "context"
+    "database/sql"
+    "encoding/json"
+    "errors"
+    "flag"
+    "fmt"
+    "io"
+    "net/http"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "runtime"
+    "strings"
+    "syscall"
+    "time"
 
-	"github.com/radovskyb/watcher"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"go.mau.fi/whatsmeow/types"
+    "github.com/radovskyb/watcher"
+    "github.com/rs/zerolog"
+    "github.com/rs/zerolog/log"
+    "go.mau.fi/whatsmeow/types"
 
-	"github.com/watchzap/internal/api"
-	"github.com/watchzap/internal/parser"
-	"github.com/watchzap/internal/prompt"
-	"github.com/watchzap/internal/static"
+    "github.com/watchzap/internal/api"
+    "github.com/watchzap/internal/parser"
+    "github.com/watchzap/internal/prompt"
+    "github.com/watchzap/internal/static"
 )
 
 // Msa stands for shortcut for map[string]any
 type msa map[string]any
 
 const (
-	version string = "v0.1.3"
+    version string = "v0.1.3"
 )
 
 var (
-	debug        bool
-	removeOnSend bool
-	folder       string
-	port         string
-	wait         int
-	printVersion bool
-	msgLimit     int
-	timeLimit    int
+    debug        bool
+    removeOnSend bool
+    folder       string
+    port         string
+    wait         int
+    printVersion bool
+    msgLimit     int
+    timeLimit    int
 )
 
 type MessageRequest struct {
-	Jid  types.JID
-	Flag bool
+    Jid  types.JID
+    Flag bool
 }
 
 // Parses messages based on their content type
 func parse(ext string, body []byte) (*[]parser.Message, error) {
-	if ext == "json" {
-		return parser.JsonParser(body)
-	} else if ext == "yaml" {
-		return parser.YamlParser(body)
-	}
+    if ext == "json" {
+        return parser.JsonParser(body)
+    } else if ext == "yaml" {
+        return parser.YamlParser(body)
+    }
 
-	return nil, errors.New(static.NO_PARSER_FOUND)
+    return nil, errors.New(static.NO_PARSER_FOUND)
 }
 
 func checkExt(ext string) (string, error) {
-	if strings.HasSuffix(ext, "json") {
-		return "json", nil
-	}
+    if strings.HasSuffix(ext, "json") {
+        return "json", nil
+    }
 
-	if strings.HasSuffix(ext, "yaml") || strings.HasSuffix(ext, "yml") {
-		return "yaml", nil
-	}
+    if strings.HasSuffix(ext, "yaml") || strings.HasSuffix(ext, "yml") {
+        return "yaml", nil
+    }
 
-	return "", errors.New(static.NO_PARSER_FOUND)
+    return "", errors.New(static.NO_PARSER_FOUND)
 }
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+    log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	flag.BoolVar(&debug, "debug", false, "enables the debug mode for WhatsApp API")
-	flag.BoolVar(&removeOnSend, "removeOnSend", false, "deletes the file after sending the message")
-	flag.BoolVar(&printVersion, "version", false, "prints the program version")
-	flag.IntVar(
-		&msgLimit,
-		"msgLimit",
-		4,
-		"limits the number of messages being sent before waiting",
-	)
-	flag.IntVar(
-		&timeLimit,
-		"timeLimit",
-		5,
-		"limits the waiting time after the msgLimit has been reached (in seconds)",
-	)
-	flag.Parse()
+    flag.BoolVar(&debug, "debug", false, "enables the debug mode for WhatsApp API")
+    flag.BoolVar(&removeOnSend, "removeOnSend", false, "deletes the file after sending the message")
+    flag.BoolVar(&printVersion, "version", false, "prints the program version")
+    flag.IntVar(
+        &msgLimit,
+        "msgLimit",
+        4,
+        "limits the number of messages being sent before waiting",
+    )
+    flag.IntVar(
+        &timeLimit,
+        "timeLimit",
+        5,
+        "limits the waiting time after the msgLimit has been reached (in seconds)",
+    )
+    flag.Parse()
 
-	if printVersion {
-		fmt.Printf("Watchzap version %s\n", version)
-		return
-	}
+    if printVersion {
+        fmt.Printf("Watchzap version %s\n", version)
+        return
+    }
 
-	db, err := sql.Open("sqlite3", "file:zap.db?_foreign_keys=on")
-	if err != nil {
-		log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
-	}
+    db, err := sql.Open("sqlite3", "file:zap.db?_foreign_keys=on")
+    if err != nil {
+        log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
+    }
 
-	whatsapp, err := api.NewWhatsapp(debug)
-	if err != nil {
-		log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
-	}
+    whatsapp, err := api.NewWhatsapp(debug)
+    if err != nil {
+        log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
+    }
 
-	err = whatsapp.Login()
-	if err != nil {
-		log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
-	}
+    err = whatsapp.Login()
+    if err != nil {
+        log.Fatal().Err(err).Msg(static.INTERNAL_SERVER_ERROR)
+    }
 
-	runResult := prompt.Select(
-		"Select ",
-		[]string{"Watch Folder", "Enable HTTP Server", "Both", "Logout"},
-	)
-	switch runResult {
-	case "Watch Folder":
-		folder = prompt.Input("What folder will you watch", nil)
-		watch(whatsapp)
-	case "Enable HTTP Server":
-		port = prompt.Input("What port will you listen", nil)
-		httpServe(whatsapp)
-	case "Both":
-		folder = prompt.Input("What folder will you watch", nil)
-		port = prompt.Input("What port will you listen", nil)
-		go httpServe(whatsapp)
-		watch(whatsapp)
-	case "Logout":
-		whatsapp.Client.Logout()
-		db.Exec(static.WIPE_DB)
-		restart()
-	}
+    runResult := prompt.Select(
+        "Select ",
+        []string{"Watch Folder", "Enable HTTP Server", "Both", "Logout"},
+    )
+    switch runResult {
+    case "Watch Folder":
+        folder = prompt.Input("What folder will you watch", nil)
+        watch(whatsapp)
+    case "Enable HTTP Server":
+        port = prompt.Input("What port will you listen", nil)
+        httpServe(whatsapp)
+    case "Both":
+        folder = prompt.Input("What folder will you watch", nil)
+        port = prompt.Input("What port will you listen", nil)
+        go httpServe(whatsapp)
+        watch(whatsapp)
+    case "Logout":
+        whatsapp.Client.Logout()
+        db.Exec(static.WIPE_DB)
+        restart()
+    }
 }
 
 // Sets up an HTTP server for receiving message requests
 func httpServe(whatsapp *api.Whatsapp) {
-	time.Sleep(time.Millisecond * 100)
+    time.Sleep(time.Millisecond * 100)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			log.Error().Err(err).Msg("WZ: Error reading request body")
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+            w.WriteHeader(http.StatusUnprocessableEntity)
+            log.Error().Err(err).Msg("WZ: Error reading request body")
 
-			jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
-			w.Write(jsonR)
-			return
-		}
-		defer r.Body.Close()
+            jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
+            w.Write(jsonR)
+            return
+        }
+        defer r.Body.Close()
 
-		messages, err := parse(r.Header.Get("Content-Type"), body)
-		if err != nil {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			log.Error().Err(err).Msg("WZ: Error parsing file")
+        suffix, err := checkExt(r.Header.Get("Content-Type"))
+        if err != nil {
+            w.WriteHeader(http.StatusUnprocessableEntity)
+            log.Error().Err(err).Msg("WZ: Error checking extension")
 
-			jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
-			w.Write(jsonR)
-			return
-		}
+            jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
+            w.Write(jsonR)
+            return
+        }
 
-		err = sendMessages(messages, whatsapp)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			log.Error().Err(err).Msg("WZ: Error sending messages")
+        messages, err := parse(suffix, body)
+        if err != nil {
+            w.WriteHeader(http.StatusUnprocessableEntity)
+            log.Error().Err(err).Msg("WZ: Error parsing file")
 
-			jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
-			w.Write(jsonR)
-			return
-		}
+            jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
+            w.Write(jsonR)
+            return
+        }
 
-		jsonR, _ := json.Marshal(msa{"status": "ok", "amount": len(*messages)})
+        err = sendMessages(messages, whatsapp)
+        if err != nil {
+            w.WriteHeader(http.StatusInternalServerError)
+            log.Error().Err(err).Msg("WZ: Error sending messages")
 
-		w.WriteHeader(http.StatusCreated)
-		w.Write(jsonR)
-	})
-	log.Info().Str("function", "http").Msg("WZ: Serving HTTP server at " + port)
-	err := http.ListenAndServe(":"+port, mux)
-	if err != nil {
-		log.Fatal().Err(err).Msg("WZ: Failed to serve HTTP server")
-	}
+            jsonR, _ := json.Marshal(msa{"status": "error", "error": err.Error()})
+            w.Write(jsonR)
+            return
+        }
+
+        jsonR, _ := json.Marshal(msa{"status": "ok", "amount": len(*messages)})
+
+        w.WriteHeader(http.StatusCreated)
+        w.Write(jsonR)
+    })
+    log.Info().Str("function", "http").Msg("WZ: Serving HTTP server at " + port)
+    err := http.ListenAndServe(":"+port, mux)
+    if err != nil {
+        log.Fatal().Err(err).Msg("WZ: Failed to serve HTTP server")
+    }
 }
 
 // Sets up a file watcher to monitor changes in a directory
 func watch(whatsapp *api.Whatsapp) {
-	w := watcher.New()
-	w.FilterOps(watcher.Create, watcher.Move, watcher.Write, watcher.Rename)
-	go func() {
-		for {
-			select {
-			case event := <-w.Event:
-				doEvent(event, whatsapp)
-			case err := <-w.Error:
-				log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Failed getting folder event")
-			case <-w.Closed:
-				return
-			}
-		}
-	}()
-	if err := w.Add(folder); err != nil {
-		log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Error adding folder to watch")
-	}
-	log.Info().Str("folder", folder).Msg("WZ: Watching folder every 100ms")
-	if err := w.Start(time.Millisecond * 100); err != nil {
-		log.Fatal().
-			Err(err).
-			Str("function", "watch").
-			Msg(fmt.Sprintf("Failed to watch folder %s", folder))
-	}
+    w := watcher.New()
+    w.FilterOps(watcher.Create, watcher.Move, watcher.Write, watcher.Rename)
+    go func() {
+        for {
+            select {
+            case event := <-w.Event:
+                doEvent(event, whatsapp)
+            case err := <-w.Error:
+                log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Failed getting folder event")
+            case <-w.Closed:
+                return
+            }
+        }
+    }()
+    if err := w.Add(folder); err != nil {
+        log.Fatal().Err(err).Str("function", "watch").Msg("WZ: Error adding folder to watch")
+    }
+    log.Info().Str("folder", folder).Msg("WZ: Watching folder every 100ms")
+    if err := w.Start(time.Millisecond * 100); err != nil {
+        log.Fatal().
+            Err(err).
+            Str("function", "watch").
+            Msg(fmt.Sprintf("Failed to watch folder %s", folder))
+    }
 }
 
 // / Processes file events triggered by the watch function
 func doEvent(w watcher.Event, whatsapp *api.Whatsapp) {
-	if w.IsDir() {
-		return
-	}
+    if w.IsDir() {
+        return
+    }
 
-	ext, err := checkExt(filepath.Ext(w.Path))
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Error checking file extension")
-		return
-	}
+    ext, err := checkExt(filepath.Ext(w.Path))
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Error checking file extension")
+        return
+    }
 
-	f, err := os.Open(w.Path)
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Failed opening file")
-		return
-	}
+    f, err := os.Open(w.Path)
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Failed opening file")
+        return
+    }
 
-	stat, err := f.Stat()
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Failed getting stat of file")
-		return
-	}
-	if stat.Size() == 0 {
-		log.Warn().Str("file", w.Name()).Str("path", w.Path).Msg("WZ: File content is empty")
-		return
-	}
+    stat, err := f.Stat()
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Failed getting stat of file")
+        return
+    }
+    if stat.Size() == 0 {
+        log.Warn().Str("file", w.Name()).Str("path", w.Path).Msg("WZ: File content is empty")
+        return
+    }
 
-	body := make([]byte, stat.Size())
-	_, err = f.Read(body)
-	if err != nil {
-		log.Error().Err(err).Str("parser", "json").Msg("WZ: Error reading file")
-		return
-	}
+    body := make([]byte, stat.Size())
+    _, err = f.Read(body)
+    if err != nil {
+        log.Error().Err(err).Str("parser", "json").Msg("WZ: Error reading file")
+        return
+    }
 
-	err = f.Close()
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Could not close file")
-		return
-	}
+    err = f.Close()
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Could not close file")
+        return
+    }
 
-	messages, err := parse(ext, body)
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Error parsing messages")
-		return
-	}
+    messages, err := parse(ext, body)
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Error parsing messages")
+        return
+    }
 
-	err = sendMessages(messages, whatsapp)
-	if err != nil {
-		log.Error().Err(err).Msg("WZ: Could not send messages")
-		return
-	}
+    err = sendMessages(messages, whatsapp)
+    if err != nil {
+        log.Error().Err(err).Msg("WZ: Could not send messages")
+        return
+    }
 
-	if removeOnSend {
-		err := os.Remove(w.Path)
-		if err != nil {
-			log.Warn().Err(err).Msg("WZ: Could not delete the file upon send")
-			return
-		}
-	}
+    if removeOnSend {
+        err := os.Remove(w.Path)
+        if err != nil {
+            log.Warn().Err(err).Msg("WZ: Could not delete the file upon send")
+            return
+        }
+    }
 }
 
 // Sends messages to recipients based on parsed messages
 func sendMessages(messages *[]parser.Message, whatsapp *api.Whatsapp) error {
-	if wait >= msgLimit {
-		for t := timeLimit; t > 0; t-- {
-			log.Info().Msgf("WZ: Waiting to prevent rate over limit...%v", t)
-			time.Sleep(time.Second * 1)
-		}
-		wait = 0
-	}
+    if wait >= msgLimit {
+        for t := timeLimit; t > 0; t-- {
+            log.Info().Msgf("WZ: Waiting to prevent rate over limit...%v", t)
+            time.Sleep(time.Second * 1)
+        }
+        wait = 0
+    }
 
-	for _, m := range *messages {
-		var req MessageRequest
+    for _, m := range *messages {
+        var req MessageRequest
 
-		contacts, err := whatsapp.Client.Store.Contacts.GetAllContacts()
-		if err != nil {
-			log.Error().Err(err).Msg("WZ: Failed getting contacts")
-			return err
-		}
-		groups, err := whatsapp.Client.GetJoinedGroups()
-		if err != nil {
-			log.Error().Err(err).Msg("WZ: Failed to get joined groups")
-			return err
-		}
+        contacts, err := whatsapp.Client.Store.Contacts.GetAllContacts()
+        if err != nil {
+            log.Error().Err(err).Msg("WZ: Failed getting contacts")
+            return err
+        }
+        groups, err := whatsapp.Client.GetJoinedGroups()
+        if err != nil {
+            log.Error().Err(err).Msg("WZ: Failed to get joined groups")
+            return err
+        }
 
-		for _, g := range groups {
-			if m.Recipient == g.GroupName.Name {
-				req.Jid = g.JID
-				req.Flag = true
-			}
-		}
-		for j, c := range contacts {
-			if m.Recipient == c.PushName || m.Recipient == c.FullName {
-				req.Jid = j
-				req.Flag = true
-			}
-		}
+        for _, g := range groups {
+            if m.Recipient == g.GroupName.Name {
+                req.Jid = g.JID
+                req.Flag = true
+            }
+        }
+        for j, c := range contacts {
+            if m.Recipient == c.PushName || m.Recipient == c.FullName {
+                req.Jid = j
+                req.Flag = true
+            }
+        }
 
-		if req.Flag {
-			sendMessage, err := whatsapp.GenerateMessage(m)
-			if err != nil {
-				return err
-			}
+        if req.Flag {
+            sendMessage, err := whatsapp.GenerateMessage(m)
+            if err != nil {
+                return err
+            }
 
-			_, err = whatsapp.Client.SendMessage(context.Background(), req.Jid, sendMessage)
-			if err != nil {
-				log.Error().Err(err).Msg("WZ: Error sending message to recipient")
-				return err
-			}
-			log.Info().
-				Str("recipient", m.Recipient).
-				Str("content", m.Content).
-				Msg("WZ: Sent message successfully")
-			wait++
-		} else {
-			log.Info().Msg("WZ: Recipient was not found")
-			return err
-		}
-	}
+            _, err = whatsapp.Client.SendMessage(context.Background(), req.Jid, sendMessage)
+            if err != nil {
+                log.Error().Err(err).Msg("WZ: Error sending message to recipient")
+                return err
+            }
+            log.Info().
+                Str("recipient", m.Recipient).
+                Str("content", m.Content).
+                Msg("WZ: Sent message successfully")
+            wait++
+        } else {
+            log.Info().Msg("WZ: Recipient was not found")
+            return err
+        }
+    }
 
-	return nil
+    return nil
 }
 
 // Restart go program execution
 func restart() {
-	self, err := os.Executable()
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-	args := os.Args
-	env := os.Environ()
+    self, err := os.Executable()
+    if err != nil {
+        log.Fatal().Err(err)
+    }
+    args := os.Args
+    env := os.Environ()
 
-	// Windows doesn't support exec syscalls :(
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command(self, args[1:]...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		cmd.Env = env
+    // Windows doesn't support exec syscalls :(
+    if runtime.GOOS == "windows" {
+        cmd := exec.Command(self, args[1:]...)
+        cmd.Stdout = os.Stdout
+        cmd.Stderr = os.Stderr
+        cmd.Stdin = os.Stdin
+        cmd.Env = env
 
-		err := cmd.Run()
-		if err != nil {
-			log.Fatal().Err(err)
-		}
+        err := cmd.Run()
+        if err != nil {
+            log.Fatal().Err(err)
+        }
 
-		os.Exit(0)
-	}
+        os.Exit(0)
+    }
 
-	syscall.Exec(self, args, env)
+    syscall.Exec(self, args, env)
 }
