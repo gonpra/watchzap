@@ -32,7 +32,7 @@ import (
 type msa map[string]any
 
 const (
-    version string = "v0.1.3"
+    version string = "v1.0.0"
 )
 
 var (
